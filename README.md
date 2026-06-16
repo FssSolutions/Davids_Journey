@@ -97,31 +97,4 @@ Psalm 23 → Chapter 1 | Psalm 27 → Chapter 3 | Psalm 51 → Chapter 5
 
 ---
 
-## What's Built (Prototype)
-
-- ✅ Cinematic title screen with starry night, scripture verse
-- ✅ Bethlehem overworld — movement, NPC interaction, sheep
-- ✅ Full branching dialogue system with scripture callouts
-- ✅ Samuel's anointing scene (full dialogue tree)
-- ✅ Goliath pre-battle dialogue with scripture quiz
-- ✅ Spare Saul moral choice (En Gedi cave)
-- ✅ Turn-based combat with Faith Strike, Sling, Shield, Heal
-- ✅ Scripture memory mini-game (fill in the blanks)
-- ✅ Persistent HUD: HP, Heart Meter, Ability bar, Codex counter
-- ✅ Game state (save/load, flags, codex, psalms)
-- ✅ Teaching moments — wrong answers get gentle correction with the real verse
-
-## Next Steps (Claude Code Tasks)
-
-- [ ] Tiled map integration (real tilemap JSON)
-- [ ] Sprite sheet animations (walk cycles for David/NPCs)
-- [ ] Valley of Elah combat level
-- [ ] Audio — ambient desert, Hebrew-inspired battle music
-- [ ] Psalm Journal UI screen
-- [ ] Scripture Codex viewer
-- [ ] Chapter 2 complete loop
-- [ ] Mobile touch controls
-
----
-
-*"The battle is the LORD's." — 1 Samuel 17:47*
+*
