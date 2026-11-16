@@ -5,6 +5,7 @@ import gameState from '../systems/GameState.js';
 import DIALOGUES from '../data/DialogueData.js';
 import audioManager from '../systems/AudioManager.js';
 import { touchInput } from '../systems/TouchInput.js';
+import { addProps, addProp, hasProp, track, sortActor, sortTracked } from '../systems/World.js';
 
 export default class EnGediScene extends Phaser.Scene {
   constructor() {
@@ -25,7 +26,7 @@ export default class EnGediScene extends Phaser.Scene {
     this.player = this.physics.add.sprite(480, 544, 'david_walk', 0);
     this.player.setCollideWorldBounds(true);
     this.player.setScale(this.registry.get('playerScale') ?? 3);
-    this.player.setDepth(5);
+    track(this, this.player);
 
     this.playerShadow = this.add.ellipse(
       this.player.x, this.player.y + 20,
@@ -33,6 +34,20 @@ export default class EnGediScene extends Phaser.Scene {
     ).setDepth(4);
 
     this.physics.add.collider(this.player, this.wallLayer);
+    // Blender-rendered stalagmites around the cave floor.
+    const caveProps = addProps(this, [
+      ['stalagmite', 110, 186], ['stalagmite', 850, 476], ['stalagmite', 130, 526],
+      ['stalagmite', 860, 306], ['stalagmite', 330, 146], ['stalagmite', 620, 546],
+      ['stalagmite', 300, 446], ['rock', 560, 130], ['rock', 180, 380],
+    ]);
+    if (this.propBodies) this.physics.add.collider(this.player, this.propBodies);
+    // The art is lit for daylight; cool and darken it so the cave reads as a cave.
+    if (this.registry.get('tiles3d')) {
+      const CAVE_TINT = 0x7f86ad;
+      this.groundLayer.setTint(CAVE_TINT);
+      this.wallLayer.setTint(CAVE_TINT);
+      caveProps.forEach(p => p && p.setTint(CAVE_TINT));
+    }
 
     this.cameras.main.startFollow(this.player, true, 0.08, 0.08);
     this.cameras.main.setBounds(0, 0, 960, 640);
@@ -279,6 +294,7 @@ export default class EnGediScene extends Phaser.Scene {
   update() {
     this.handlePlayerMovement();
     this.playerShadow.setPosition(this.player.x, this.player.y + 22);
+    sortTracked(this);
   }
 
   handlePlayerMovement() {

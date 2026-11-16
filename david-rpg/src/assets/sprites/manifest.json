@@ -1,39 +1,221 @@
 {
-  "generated": true,
-  "timestamp": "2026-06-14T04:56:43.139Z",
-  "playerFrameSize": 64,
-  "npcSpriteSize": 32,
-  "files": [
-    "david_base.png",
-    "david_south_0.png",
-    "david_south_1.png",
-    "david_south_2.png",
-    "david_south_3.png",
-    "david_north_0.png",
-    "david_north_1.png",
-    "david_north_2.png",
-    "david_north_3.png",
-    "david_west_0.png",
-    "david_west_1.png",
-    "david_west_2.png",
-    "david_west_3.png",
-    "david_east_0.png",
-    "david_east_1.png",
-    "david_east_2.png",
-    "david_east_3.png",
-    "portraits/david.png",
-    "samuel_base.png",
-    "portraits/samuel.png",
-    "jonathan_base.png",
-    "portraits/jonathan.png",
-    "saul_base.png",
-    "portraits/saul.png",
-    "philistine_base.png",
-    "goliath_base.png",
-    "portraits/goliath.png",
-    "items/stone.png",
-    "items/heart.png",
-    "items/faith_orb.png",
-    "items/goliath_sword.png"
-  ]
+  "characters": {
+    "david": {
+      "battle": {
+        "attackFrames": 6,
+        "file": "battle/david.png",
+        "frameHeight": 176,
+        "frameWidth": 176,
+        "idleFrames": 4
+      },
+      "frameHeight": 64,
+      "frameWidth": 64
+    },
+    "goliath": {
+      "battle": {
+        "attackFrames": 6,
+        "file": "battle/goliath.png",
+        "frameHeight": 288,
+        "frameWidth": 256,
+        "idleFrames": 4
+      },
+      "frameHeight": 160,
+      "frameWidth": 128
+    },
+    "israelite": {
+      "frameHeight": 64,
+      "frameWidth": 64
+    },
+    "jesse": {
+      "frameHeight": 64,
+      "frameWidth": 64
+    },
+    "jonathan": {
+      "frameHeight": 64,
+      "frameWidth": 64
+    },
+    "philistine": {
+      "battle": {
+        "attackFrames": 6,
+        "file": "battle/philistine.png",
+        "frameHeight": 176,
+        "frameWidth": 176,
+        "idleFrames": 4
+      },
+      "frameHeight": 64,
+      "frameWidth": 64
+    },
+    "samuel": {
+      "frameHeight": 64,
+      "frameWidth": 64
+    },
+    "saul": {
+      "frameHeight": 64,
+      "frameWidth": 64
+    }
+  },
+  "directions": [
+    "south",
+    "north",
+    "west",
+    "east"
+  ],
+  "generator": "blender",
+  "idleFrames": 4,
+  "items": {
+    "faith_orb": {
+      "file": "items/faith_orb.png",
+      "height": 32,
+      "width": 32
+    },
+    "goliath_sword": {
+      "file": "items/goliath_sword.png",
+      "height": 64,
+      "width": 32
+    },
+    "heart": {
+      "file": "items/heart.png",
+      "height": 32,
+      "width": 32
+    },
+    "stone": {
+      "file": "items/stone.png",
+      "height": 32,
+      "width": 32
+    }
+  },
+  "props": {
+    "brazier": {
+      "file": "props/brazier.png",
+      "ground": 7,
+      "height": 34,
+      "width": 24
+    },
+    "bush": {
+      "file": "props/bush.png",
+      "ground": 9,
+      "height": 32,
+      "width": 40
+    },
+    "house": {
+      "file": "props/house.png",
+      "ground": 36,
+      "height": 164,
+      "solid": [
+        110,
+        54
+      ],
+      "width": 144
+    },
+    "pillar": {
+      "file": "props/pillar.png",
+      "ground": 10,
+      "height": 96,
+      "solid": [
+        28,
+        14
+      ],
+      "width": 36
+    },
+    "rock": {
+      "file": "props/rock.png",
+      "ground": 10,
+      "height": 32,
+      "solid": [
+        30,
+        12
+      ],
+      "width": 40
+    },
+    "sheep": {
+      "file": "props/sheep.png",
+      "ground": 8,
+      "height": 36,
+      "width": 40
+    },
+    "stalagmite": {
+      "file": "props/stalagmite.png",
+      "ground": 9,
+      "height": 44,
+      "solid": [
+        24,
+        10
+      ],
+      "width": 36
+    },
+    "tent_israelite": {
+      "file": "props/tent_israelite.png",
+      "ground": 32,
+      "height": 110,
+      "solid": [
+        74,
+        34
+      ],
+      "width": 110
+    },
+    "tent_philistine": {
+      "file": "props/tent_philistine.png",
+      "ground": 32,
+      "height": 110,
+      "solid": [
+        74,
+        34
+      ],
+      "width": 110
+    },
+    "throne": {
+      "file": "props/throne.png",
+      "ground": 22,
+      "height": 92,
+      "solid": [
+        60,
+        24
+      ],
+      "width": 76
+    },
+    "tree": {
+      "file": "props/tree.png",
+      "ground": 12,
+      "height": 96,
+      "solid": [
+        20,
+        12
+      ],
+      "width": 72
+    },
+    "well": {
+      "file": "props/well.png",
+      "ground": 14,
+      "height": 56,
+      "solid": [
+        30,
+        16
+      ],
+      "width": 48
+    }
+  },
+  "tiles": {
+    "columns": 8,
+    "file": "tiles.png",
+    "ids": {
+      "carpet": 11,
+      "dais": 12,
+      "darkrock": 8,
+      "darkrock_face": 10,
+      "dirt": 6,
+      "dirt_b": 15,
+      "grass": 4,
+      "grass_b": 14,
+      "path": 7,
+      "sand": 1,
+      "sand_b": 13,
+      "stone": 2,
+      "stone_b": 16,
+      "wall": 3,
+      "wall_face": 9,
+      "water": 5
+    },
+    "rows": 2
+  },
+  "walkFrames": 8
 }

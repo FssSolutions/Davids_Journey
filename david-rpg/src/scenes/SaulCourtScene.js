@@ -5,6 +5,7 @@ import gameState from '../systems/GameState.js';
 import DIALOGUES from '../data/DialogueData.js';
 import audioManager from '../systems/AudioManager.js';
 import { touchInput } from '../systems/TouchInput.js';
+import { addProps, addProp, hasProp, track, sortActor, sortTracked } from '../systems/World.js';
 
 export default class SaulCourtScene extends Phaser.Scene {
   constructor() {
@@ -26,7 +27,7 @@ export default class SaulCourtScene extends Phaser.Scene {
     this.player = this.physics.add.sprite(480, 560, 'david_walk', 0);
     this.player.setCollideWorldBounds(true);
     this.player.setScale(this.registry.get('playerScale') ?? 3);
-    this.player.setDepth(5);
+    track(this, this.player);
 
     this.playerShadow = this.add.ellipse(
       this.player.x, this.player.y + 20,
@@ -34,6 +35,7 @@ export default class SaulCourtScene extends Phaser.Scene {
     ).setDepth(4);
 
     this.physics.add.collider(this.player, this.wallLayer);
+    this.buildHall();
 
     this.cameras.main.startFollow(this.player, true, 0.08, 0.08);
     this.cameras.main.setBounds(0, 0, 960, 640);
@@ -88,7 +90,7 @@ export default class SaulCourtScene extends Phaser.Scene {
   spawnJonathan(x, y) {
     const jonathan = this.physics.add.sprite(x, y, 'jonathan');
     jonathan.setScale(this.registry.get('npcScale') ?? 3);
-    jonathan.setDepth(5);
+    track(this, jonathan);
     jonathan.setImmovable(true);
     if (this.anims.exists('jonathan_idle_down')) jonathan.play('jonathan_idle_down');
     jonathan.name = 'jonathan';
@@ -118,7 +120,7 @@ export default class SaulCourtScene extends Phaser.Scene {
   spawnSaul(x, y) {
     const saul = this.add.sprite(x, y, 'saul');
     saul.setScale((this.registry.get('npcScale') ?? 3) * 4 / 3);
-    saul.setDepth(5);
+    track(this, saul);
     if (this.anims.exists('saul_idle_down')) saul.play('saul_idle_down');
     this.saulSprite = saul;
     this._saulHome = { x, y };
@@ -133,21 +135,47 @@ export default class SaulCourtScene extends Phaser.Scene {
     });
   }
 
+  // Blender-rendered scenery: columns down both sides, braziers, and the throne.
+  // Column tiles are (col 5 | 24, row 4 | 10 | 15); each prop stands on its tile.
+  buildHall() {
+    this._hasHallProps = hasProp(this, 'pillar');
+    const rows = [];
+    [176, 784].forEach((x, side) => {
+      [158, 350, 510].forEach(y => {
+        rows.push(['pillar', x, y]);
+        rows.push(['brazier', x + (side ? 40 : -40), y - 4]);
+      });
+    });
+    rows.push(['throne', 480, 108]);
+    addProps(this, rows);
+    if (this.propBodies) this.physics.add.collider(this.player, this.propBodies);
+  }
+
   spawnGuards() {
+    // Guards stand just inside the colonnade.
+    const inset = this._hasHallProps ? 62 : 0;
     const positions = [
-      { x: 160, y: 200 }, { x: 800, y: 200 },
-      { x: 160, y: 340 }, { x: 800, y: 340 },
-      { x: 160, y: 480 }, { x: 800, y: 480 },
+      { x: 160 + inset, y: 200 }, { x: 800 - inset, y: 200 },
+      { x: 160 + inset, y: 340 }, { x: 800 - inset, y: 340 },
+      { x: 160 + inset, y: 480 }, { x: 800 - inset, y: 480 },
     ];
-    positions.forEach(pos => {
-      this.add.sprite(pos.x, pos.y, 'israelite')
-        .setScale((this.registry.get('npcScale') ?? 3) * 5 / 6).setDepth(4);
+    positions.forEach((pos, i) => {
+      const guard = this.add.sprite(pos.x, pos.y, 'israelite')
+        .setScale((this.registry.get('npcScale') ?? 3) * 5 / 6);
+      sortActor(guard);
+      const anim = pos.x < 480 ? 'israelite_idle_right' : 'israelite_idle_left';
+      if (this.anims.exists(anim)) guard.play({ key: anim, startFrame: i % 4 });
     });
   }
 
   createAmbience() {
     // Torch flicker at pillar positions
-    const torchPositions = [
+    // With the Blender props the flames sit in the brazier bowls beside each column.
+    const torchPositions = this._hasHallProps ? [
+      { x: 136, y: 138 }, { x: 824, y: 138 },
+      { x: 136, y: 330 }, { x: 824, y: 330 },
+      { x: 136, y: 490 }, { x: 824, y: 490 },
+    ] : [
       { x: 160, y: 128 }, { x: 768, y: 128 },
       { x: 160, y: 320 }, { x: 768, y: 320 },
       { x: 160, y: 480 }, { x: 768, y: 480 },
@@ -410,6 +438,7 @@ export default class SaulCourtScene extends Phaser.Scene {
   }
 
   update() {
+    sortTracked(this);
     if (this.inCinematic) {
       this.playerShadow.setPosition(this.player.x, this.player.y + 22);
       return;

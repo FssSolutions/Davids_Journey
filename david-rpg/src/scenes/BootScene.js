@@ -34,23 +34,24 @@ export default class BootScene extends Phaser.Scene {
 
     this.createPlaceholderTextures();
 
-    // ── Real sprites (gated by manifest.json — only present after generate-sprites.js) ──
-    this.load.json('sprite_manifest', 'src/assets/sprites/manifest.json');
-    ['south', 'north', 'west', 'east'].forEach(dir => {
-      for (let i = 0; i < 4; i++) {
-        this.load.image(`david_${dir}_${i}`, `src/assets/sprites/david_${dir}_${i}.png`);
-      }
+    // ── Blender-rendered art ──
+    // blender/build_assets.py writes every sprite plus manifest.json, which lists
+    // what exists and its frame sizes. Queue the rest of the art once it arrives.
+    const SPR = 'src/assets/sprites/';
+    this.load.json('sprite_manifest', `${SPR}manifest.json`);
+    this.load.once('filecomplete-json-sprite_manifest', (key, type, m) => {
+      if (!m || m.generator !== 'blender') return;
+      Object.entries(m.characters || {}).forEach(([name, c]) => {
+        this.load.spritesheet(`${name}_sheet`, `${SPR}${name}_sheet.png`,
+          { frameWidth: c.frameWidth, frameHeight: c.frameHeight });
+        if (c.battle) {
+          this.load.spritesheet(`battle_${name}`, SPR + c.battle.file,
+            { frameWidth: c.battle.frameWidth, frameHeight: c.battle.frameHeight });
+        }
+      });
+      if (m.tiles) this.load.image('tiles3d', SPR + m.tiles.file);
+      Object.entries(m.props || {}).forEach(([name, p]) => this.load.image(`prop_${name}`, SPR + p.file));
     });
-    this.load.image('david_img', 'src/assets/sprites/david_base.png');
-    ['samuel', 'jonathan', 'saul', 'philistine', 'goliath', 'israelite'].forEach(k =>
-      this.load.image(`${k}_img`, `src/assets/sprites/${k}_base.png`)
-    );
-    // Directional sprites (front + 3 consistent rotations) for 4-sided facing.
-    ['samuel', 'saul', 'jonathan', 'philistine', 'israelite', 'jesse'].forEach(c =>
-      ['south', 'north', 'west', 'east'].forEach(d =>
-        this.load.image(`${c}_${d}`, `src/assets/sprites/${c}_${d}.png`)
-      )
-    );
     ['david', 'samuel', 'jonathan', 'saul', 'goliath',
      'jesse', 'eliab', 'abishai', 'israelite_soldier'].forEach(k =>
       this.load.image(`portrait_${k}`, `src/assets/portraits/${k}.png`)
@@ -588,22 +589,41 @@ export default class BootScene extends Phaser.Scene {
     // David keeps unprefixed anim names (walk_down, idle_down, ...) for scene compatibility.
     this._buildActorAnims('david', '');
     // NPCs & enemies get prefixed anims (e.g. samuel_walk_down, philistine_idle_left).
-    ['samuel', 'saul', 'jonathan', 'philistine', 'israelite', 'jesse'].forEach(c =>
+    ['samuel', 'saul', 'jonathan', 'philistine', 'israelite', 'jesse', 'goliath'].forEach(c =>
       this._buildActorAnims(c, `${c}_`)
     );
+    // Battle-screen sheets: idle loop, then a one-shot attack.
+    const m = this.cache.json.get('sprite_manifest');
+    Object.entries((m && m.characters) || {}).forEach(([name, c]) => {
+      const key = `battle_${name}`;
+      if (!c.battle || !this.textures.exists(key)) return;
+      const { idleFrames, attackFrames } = c.battle;
+      this.anims.create({
+        key: `${key}_idle`, frameRate: 4, repeat: -1,
+        frames: this.anims.generateFrameNumbers(key, { start: 0, end: idleFrames - 1 })
+      });
+      this.anims.create({
+        key: `${key}_attack`, frameRate: 14, repeat: 0,
+        frames: this.anims.generateFrameNumbers(key, { start: idleFrames, end: idleFrames + attackFrames - 1 })
+      });
+    });
   }
 
   _buildActorAnims(name, prefix) {
     const sheet = `${name}_walk`;
     if (!this.textures.exists(sheet)) return;
+    // Procedural fallback sheet is 4 walk frames per row with no separate idle frames.
+    const layout = this.registry.get('spriteLayout') || { idle: 0, walk: 4, cols: 4 };
     const rows = ['down', 'up', 'left', 'right']; // matches sheet rows south/north/west/east
     rows.forEach((d, row) => {
+      const first = row * layout.cols;
+      const range = (start, n) => Array.from({ length: n }, (_, i) => ({ key: sheet, frame: first + start + i }));
       const wkey = `${prefix}walk_${d}`;
       if (!this.anims.exists(wkey)) {
         this.anims.create({
           key: wkey,
-          frames: [0, 1, 2, 3].map(col => ({ key: sheet, frame: row * 4 + col })),
-          frameRate: 8,
+          frames: range(layout.idle, layout.walk),
+          frameRate: layout.walk > 4 ? 12 : 8,
           repeat: -1
         });
       }
@@ -611,15 +631,48 @@ export default class BootScene extends Phaser.Scene {
       if (!this.anims.exists(ikey)) {
         this.anims.create({
           key: ikey,
-          frames: [{ key: sheet, frame: row * 4 }],
-          frameRate: 1,
+          frames: range(0, Math.max(1, layout.idle)),
+          frameRate: 4,
           repeat: -1
         });
       }
     });
   }
 
+  // Turn flat wall masses into raised rock: any wall tile with open ground to its
+  // south shows its front face. Also mixes in ground variants to break up repetition.
+  // Tile ids added by blender/props.py: 9 wall face, 10 dark-rock face, 13-16 variants.
+  _add25D(ground, walls, extraWallLayers = []) {
+    if (!this.registry.get('tiles3d')) return;
+    const FACE = { 3: 9, 8: 10 };
+    const VARIANT = { 1: 13, 4: 14, 6: 15, 2: 16 };
+    const H = ground.length, W = ground[0].length;
+    const isWall = (r, c) => FACE[walls[r][c]] !== undefined || walls[r][c] === 9 || walls[r][c] === 10;
+    for (let r = 0; r < H; r++) {
+      for (let c = 0; c < W; c++) {
+        if (FACE[walls[r][c]] !== undefined && r < H - 1 && !isWall(r + 1, c)) {
+          const face = FACE[walls[r][c]];
+          walls[r][c] = face;
+          if (FACE[ground[r][c]] !== undefined) ground[r][c] = face;
+        } else if (VARIANT[ground[r][c]] !== undefined && ((r * 7 + c * 13 + ((r * c) % 5)) % 4 === 0)) {
+          ground[r][c] = VARIANT[ground[r][c]];
+        }
+      }
+    }
+  }
+
   createTilemaps() {
+    const tiles3d = !!this.registry.get('tiles3d');
+    const TILESET = {
+      firstgid: 1, name: 'tiles',
+      tilewidth: 32, tileheight: 32,
+      spacing: 0, margin: 0,
+      columns: 8, imagewidth: 256, imageheight: tiles3d ? 64 : 32,
+      image: 'tiles'
+    };
+    const CARPET = tiles3d ? 11 : 7;
+    const DAIS   = tiles3d ? 12 : 8;
+
     // ── Bethlehem Fields — 40 × 30 tiles (1280 × 960 px) ──
     // Tile IDs (1-based): 1=sand, 2=stone, 3=wall/rock, 4=grass, 5=water, 6=darkdirt, 7=path, 8=darkrock
     const BW = 40, BH = 30;
@@ -674,16 +727,11 @@ export default class BootScene extends Phaser.Scene {
       bethlehemWalls.push(wRow);
     }
 
+    this._add25D(bethlehemGround, bethlehemWalls);
     const bethlehemData = {
       width: BW, height: BH, tilewidth: 32, tileheight: 32,
       orientation: 'orthogonal', renderorder: 'right-down',
-      tilesets: [{
-        firstgid: 1, name: 'tiles',
-        tilewidth: 32, tileheight: 32,
-        spacing: 0, margin: 0,
-        columns: 8, imagewidth: 256, imageheight: 32,
-        image: 'tiles'
-      }],
+      tilesets: [TILESET],
       layers: [
         {
           type: 'tilelayer', name: 'ground',
@@ -748,7 +796,8 @@ export default class BootScene extends Phaser.Scene {
           waRow.push(3);
         } else {
           // Valley floor — mix of dark dirt and sand
-          const isDarkFloor = (r + c) % 7 < 2;
+          // Irregular patches of darker earth rather than a regular pattern.
+          const isDarkFloor = Math.sin(r * 0.55) + Math.cos(c * 0.45 + r * 0.2) > 1.15;
           gRow.push(isDarkFloor ? 6 : 1);
           wRow.push(0);
           waRow.push(0);
@@ -759,16 +808,11 @@ export default class BootScene extends Phaser.Scene {
       valleyWalls.push(waRow);
     }
 
+    this._add25D(valleyGround, valleyWalls);
     const valleyData = {
       width: VW, height: VH, tilewidth: 32, tileheight: 32,
       orientation: 'orthogonal', renderorder: 'right-down',
-      tilesets: [{
-        firstgid: 1, name: 'tiles',
-        tilewidth: 32, tileheight: 32,
-        spacing: 0, margin: 0,
-        columns: 8, imagewidth: 256, imageheight: 32,
-        image: 'tiles'
-      }],
+      tilesets: [TILESET],
       layers: [
         {
           type: 'tilelayer', name: 'ground',
@@ -811,11 +855,12 @@ export default class BootScene extends Phaser.Scene {
         if (isBorder) {
           gRow.push(3); wRow.push(3);
         } else if (isPillar) {
-          gRow.push(8); wRow.push(3);
+          // With Blender art the pillar is a prop (SaulCourtScene) standing on plain floor.
+          gRow.push(tiles3d ? 2 : 8); wRow.push(tiles3d ? 0 : 3);
         } else if (isThroneArea) {
-          gRow.push(8); wRow.push(0);
+          gRow.push(DAIS); wRow.push(0);
         } else if (isCarpet) {
-          gRow.push(7); wRow.push(0);
+          gRow.push(CARPET); wRow.push(0);
         } else {
           gRow.push(2); wRow.push(0);
         }
@@ -824,16 +869,11 @@ export default class BootScene extends Phaser.Scene {
       courtWalls.push(wRow);
     }
 
+    this._add25D(courtGround, courtWalls);
     const courtData = {
       width: SCW, height: SCH, tilewidth: 32, tileheight: 32,
       orientation: 'orthogonal', renderorder: 'right-down',
-      tilesets: [{
-        firstgid: 1, name: 'tiles',
-        tilewidth: 32, tileheight: 32,
-        spacing: 0, margin: 0,
-        columns: 8, imagewidth: 256, imageheight: 32,
-        image: 'tiles'
-      }],
+      tilesets: [TILESET],
       layers: [
         {
           type: 'tilelayer', name: 'ground',
@@ -869,7 +909,8 @@ export default class BootScene extends Phaser.Scene {
         const isRock     = (r >= 6 && r <= 8 && c >= 5 && c <= 7) ||
                            (r >= 11 && r <= 13 && c >= 20 && c <= 22) ||
                            (r >= 9 && r <= 10 && c >= 13 && c <= 14);
-        const isDark     = isInterior && !isPool && !isRock && ((r + c) % 5 < 2);
+        const isDark     = isInterior && !isPool && !isRock &&
+                           (Math.sin(r * 0.8 + 1) + Math.cos(c * 0.6 + r * 0.3) > 0.9);
 
         if (isBorder) {
           gRow.push(8); wRow.push(8);
@@ -887,16 +928,11 @@ export default class BootScene extends Phaser.Scene {
       caveWalls.push(wRow);
     }
 
+    this._add25D(caveGround, caveWalls);
     const caveData = {
       width: EW, height: EH, tilewidth: 32, tileheight: 32,
       orientation: 'orthogonal', renderorder: 'right-down',
-      tilesets: [{
-        firstgid: 1, name: 'tiles',
-        tilewidth: 32, tileheight: 32,
-        spacing: 0, margin: 0,
-        columns: 8, imagewidth: 256, imageheight: 32,
-        image: 'tiles'
-      }],
+      tilesets: [TILESET],
       layers: [
         {
           type: 'tilelayer', name: 'ground',
@@ -917,24 +953,36 @@ export default class BootScene extends Phaser.Scene {
     });
   }
 
-  upgradeToRealSprites() {
-    // Player: 4 animation frames per direction (true walk cycle).
-    this._buildActorSheet('david', 4);
-    // NPCs & enemies: 1 consistent frame per direction (rotated, same character).
-    ['samuel', 'saul', 'jonathan', 'philistine', 'israelite', 'jesse'].forEach(c =>
-      this._buildActorSheet(c, 1)
-    );
+  upgradeToRealSprites(manifest) {
+    const cols = manifest.idleFrames + manifest.walkFrames;
+    this.registry.set('spriteLayout', { idle: manifest.idleFrames, walk: manifest.walkFrames, cols });
+    this.registry.set('props', manifest.props || {});
 
-    // Primary front-facing textures used by scenes that don't animate the actor.
-    this._faceTexture('david',     'david_south_0');
-    this._faceTexture('samuel',    'samuel_south');
-    this._faceTexture('saul',      'saul_south');
-    this._faceTexture('jonathan',  'jonathan_south');
-    this._faceTexture('jesse',     'jesse_south');
-    this._faceTexture('enemy',     'philistine_south');
-    this._faceTexture('israelite', 'israelite_south');
+    // Walk sheets: rows south/north/west/east, columns idle frames then walk frames.
+    Object.entries(manifest.characters || {}).forEach(([name, c]) => {
+      const src = `${name}_sheet`;
+      if (!this.textures.exists(src)) return;
+      const key = `${name}_walk`;
+      if (this.textures.exists(key)) this.textures.remove(key);
+      this.textures.addSpriteSheet(key, this.textures.get(src).getSourceImage(),
+        { frameWidth: c.frameWidth, frameHeight: c.frameHeight });
+    });
 
-    this._replaceTexture('goliath',  'goliath_img',    64, 96);
+    // Front-facing stills used by scenes that don't animate the actor.
+    this._faceTexture('david',     'david_sheet');
+    this._faceTexture('samuel',    'samuel_sheet');
+    this._faceTexture('saul',      'saul_sheet');
+    this._faceTexture('jonathan',  'jonathan_sheet');
+    this._faceTexture('jesse',     'jesse_sheet');
+    this._faceTexture('enemy',     'philistine_sheet');
+    this._faceTexture('israelite', 'israelite_sheet');
+    this._faceTexture('goliath',   'goliath_sheet');
+
+    if (this.textures.exists('tiles3d')) {
+      const img = this.textures.get('tiles3d').getSourceImage();
+      this._replaceTexture('tiles', 'tiles3d', img.width, img.height);
+      this.registry.set('tiles3d', true);
+    }
     this._replaceTexture('stone',    'stone_img',      16, 16);
     this._replaceTexture('heart',    'heart_img',      16, 16);
     this._replaceTexture('faith_orb','faith_orb_img',  16, 16);
@@ -942,44 +990,18 @@ export default class BootScene extends Phaser.Scene {
     this.registry.set('playerScale', 1);
     this.registry.set('npcScale', 1.0);
     this.registry.set('enemyScale', 1.0);
-    this.registry.set('goliathScale', 2.2);
+    this.registry.set('goliathScale', 1.0);
     this.registry.set('loadedPortraits', ['david', 'samuel', 'jonathan', 'saul', 'goliath']);
   }
 
-  // Build a 4x4 (dir x frame) walk spritesheet `${name}_walk` from directional images.
-  // framesPerDir 4 → `${name}_${dir}_${col}`; framesPerDir 1 → `${name}_${dir}` repeated.
-  _buildActorSheet(name, framesPerDir) {
-    const dirs = ['south', 'north', 'west', 'east'];
-    const probe = framesPerDir === 4 ? `${name}_south_0` : `${name}_south`;
-    if (!this.textures.exists(probe)) return;
-    const sheetKey = `${name}_walk`;
-    this.textures.remove(sheetKey);
-    const canvas = this.textures.createCanvas(sheetKey, 256, 256);
-    const ctx = canvas.getContext();
-    dirs.forEach((dir, row) => {
-      for (let col = 0; col < 4; col++) {
-        let srcKey = framesPerDir === 4 ? `${name}_${dir}_${col}` : `${name}_${dir}`;
-        if (!this.textures.exists(srcKey)) srcKey = framesPerDir === 4 ? `${name}_${dir}_0` : `${name}_south`;
-        if (!this.textures.exists(srcKey)) srcKey = framesPerDir === 4 ? `${name}_south_0` : `${name}_south`;
-        if (this.textures.exists(srcKey)) {
-          ctx.drawImage(this.textures.get(srcKey).getSourceImage(), col * 64, row * 64, 64, 64);
-        }
-      }
-    });
-    canvas.refresh();
-    for (let row = 0; row < 4; row++) {
-      for (let col = 0; col < 4; col++) {
-        canvas.add(row * 4 + col, 0, col * 64, row * 64, 64, 64);
-      }
-    }
-  }
-
-  // Copy a single directional source image into a flat texture `key` for static use.
-  _faceTexture(key, srcKey, size = 64) {
-    if (!this.textures.exists(srcKey)) return;
+  // Copy the first frame (facing south, idle) of a sheet into a flat texture `key`.
+  _faceTexture(key, sheetKey) {
+    if (!this.textures.exists(sheetKey)) return;
+    const frame = this.textures.getFrame(sheetKey, 0);
     this.textures.remove(key);
-    const c = this.textures.createCanvas(key, size, size);
-    c.getContext().drawImage(this.textures.get(srcKey).getSourceImage(), 0, 0, size, size);
+    const c = this.textures.createCanvas(key, frame.width, frame.height);
+    c.getContext().drawImage(frame.source.image, frame.cutX, frame.cutY, frame.width, frame.height,
+      0, 0, frame.width, frame.height);
     c.refresh();
   }
 
@@ -1000,8 +1022,9 @@ export default class BootScene extends Phaser.Scene {
     this.registry.set('enemyScale', 2.5);
     this.registry.set('goliathScale', 4);
     this.registry.set('loadedPortraits', []);
-    if (this.cache.json.exists('sprite_manifest')) {
-      this.upgradeToRealSprites();
+    const manifest = this.cache.json.get('sprite_manifest');
+    if (manifest && manifest.generator === 'blender') {
+      this.upgradeToRealSprites(manifest);
     } else {
       this.registry.set('useRealSprites', true);
       this.registry.set('loadedPortraits', ['david', 'samuel', 'jonathan', 'saul', 'goliath']);
