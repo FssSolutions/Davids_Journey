@@ -5,6 +5,7 @@
 import gameState from '../systems/GameState.js';
 import audioManager from '../systems/AudioManager.js';
 import { touchInput } from '../systems/TouchInput.js';
+import { addProps, addProp, hasProp, track, sortActor, sortTracked } from '../systems/World.js';
 
 const MAP_W = 1920;
 const MAP_H = 1280;
@@ -205,7 +206,7 @@ export default class ValleyScene extends Phaser.Scene {
     );
     this.player.setCollideWorldBounds(true);
     this.player.setScale(this.registry.get('playerScale') ?? 3);
-    this.player.setDepth(5);
+    track(this, this.player);
 
     this.playerShadow = this.add.ellipse(
       this.player.x, this.player.y + 22,
@@ -227,7 +228,7 @@ export default class ValleyScene extends Phaser.Scene {
     positions.forEach(pos => {
       const enemy = this.physics.add.sprite(pos.x, pos.y, tex);
       enemy.setScale(this.registry.get('enemyScale') ?? 2.5);
-      enemy.setDepth(5);
+      track(this, enemy);
       enemy.enemyType = 'philistine';
       if (this.anims.exists('philistine_idle_down')) enemy.play('philistine_idle_down');
 
@@ -287,7 +288,9 @@ export default class ValleyScene extends Phaser.Scene {
   spawnGoliath() {
     this.goliath = this.physics.add.sprite(MAP_W / 2, MAP_H * 0.18, 'goliath');
     this.goliath.setScale(this.registry.get('goliathScale') ?? 4);
-    this.goliath.setDepth(6);
+    // Blender sheet frame is 128x160 with the feet 14px above the bottom edge.
+    sortActor(this.goliath, 66);
+    if (this.anims.exists('goliath_idle_down')) this.goliath.play('goliath_idle_down');
     this.goliath.enemyType = 'goliath';
 
     this.tweens.add({
@@ -332,8 +335,8 @@ export default class ValleyScene extends Phaser.Scene {
     for (let i = 0; i < isrCount; i++) {
       const baseX = MAP_W * 0.5 + (i - (isrCount - 1) / 2) * 120;
       const baseY = isrY + (i % 2) * 34;
-      const unit = this.add.sprite(baseX, baseY, 'israelite')
-        .setScale(unitScale).setDepth(4);
+      const unit = sortActor(this.add.sprite(baseX, baseY, 'israelite').setScale(unitScale));
+      if (this.anims.exists('israelite_idle_up')) unit.play({ key: 'israelite_idle_up', startFrame: i % 4 });
       // nervous, shivering jitter
       this.tweens.add({
         targets: unit,
@@ -354,8 +357,8 @@ export default class ValleyScene extends Phaser.Scene {
       for (let i = 0; i < 4; i++) {
         const baseX = MAP_W * 0.5 + side * (220 + i * 100);
         const baseY = isrY2 + (i % 2) * 30;
-        const unit = this.add.sprite(baseX, baseY, 'enemy')
-          .setScale(unitScale).setDepth(4).setFlipX(side < 0);
+        const unit = sortActor(this.add.sprite(baseX, baseY, 'enemy').setScale(unitScale));
+        if (this.anims.exists('philistine_idle_down')) unit.play({ key: 'philistine_idle_down', startFrame: i % 4 });
         this.tweens.add({
           targets: unit,
           x: baseX + side * 7,
@@ -374,7 +377,8 @@ export default class ValleyScene extends Phaser.Scene {
     this._soldierTalked = false;
     this.soldierNPC = this.add.sprite(
       MAP_W * 0.5 - 150, MAP_H * 0.74, 'israelite'
-    ).setScale(this.registry.get('enemyScale') ?? 1).setDepth(5);
+    ).setScale(this.registry.get('enemyScale') ?? 1);
+    sortActor(this.soldierNPC);
     if (this.anims.exists('israelite_idle_down')) this.soldierNPC.play('israelite_idle_down');
 
     this.add.ellipse(
@@ -411,7 +415,8 @@ export default class ValleyScene extends Phaser.Scene {
   spawnSaulNPC() {
     this.saulNPC = this.add.sprite(
       MAP_W * 0.5 + 150, MAP_H * 0.74, 'saul'
-    ).setScale((this.registry.get('npcScale') ?? 1) * 1.3).setDepth(5);
+    ).setScale((this.registry.get('npcScale') ?? 1) * 1.3);
+    sortActor(this.saulNPC);
     if (this.anims.exists('saul_idle_down')) this.saulNPC.play('saul_idle_down');
 
     this.add.ellipse(
@@ -475,7 +480,24 @@ export default class ValleyScene extends Phaser.Scene {
     this.interactKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.E);
   }
 
+  // Blender-rendered scenery: the two war camps facing each other across the valley.
+  buildCamps() {
+    addProps(this, [
+      // Israelite camp (south)
+      ['tent_israelite', 340, 1100], ['tent_israelite', 470, 1156],
+      ['tent_israelite', 1450, 1100], ['tent_israelite', 1580, 1156],
+      // Philistine camp (north)
+      ['tent_philistine', 300, 176], ['tent_philistine', 410, 104],
+      ['tent_philistine', 1620, 176], ['tent_philistine', 1510, 104],
+      ['tree', 1560, 566], ['tree', 250, 330], ['tree', 700, 1056], ['tree', 1250, 770], ['tree', 1380, 300],
+      ['bush', 262, 500], ['bush', 836, 664], ['bush', 1180, 1090], ['bush', 620, 330],
+      ['rock', 1120, 706], ['rock', 700, 250], ['rock', 880, 760],
+    ]);
+    if (this.propBodies) this.physics.add.collider(this.player, this.propBodies);
+  }
+
   setupCollisions() {
+    this.buildCamps();
     // Regular philistine combat
     this.enemies.forEach(enemy => {
       this.physics.add.overlap(this.player, enemy, () => {
@@ -937,6 +959,7 @@ export default class ValleyScene extends Phaser.Scene {
     if (this.inCombat || this._cinematicPlaying) return;
     this.handleMovement();
     this.playerShadow.setPosition(this.player.x, this.player.y + 22);
+    sortTracked(this);
     this.handleInteractions();
   }
 

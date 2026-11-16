@@ -32,9 +32,11 @@ This is a 2D top-down Biblical RPG built with Phaser.js 3.60 (CDN, no build tool
 
 - Portraits display in dialogue panels. `useRealSprites = true` set unconditionally in `BootScene.create()`
 - Real PNG portraits can replace procedural art by dropping files into `src/assets/portraits/{name}.png` (david, saul, jonathan, samuel, goliath)
-- Walking sprites: `src/assets/sprites/david_{direction}_{frame}.png` (directions: south/north/west/east, frames 0–3)
-- Create `src/assets/sprites/manifest.json` (just `{}`) to trigger the real-sprite upgrade path
-- **Pixel Lab API**: user has access — ask for API key and endpoint at the start of the session if generating art
+- **Blender pipeline (2.5D look)**: all sprites, tiles, props and items are rendered from 3D models by `python3 blender/build_assets.py` (needs `pip install bpy`, or run with `blender -b -P`). See `david-rpg/blender/README.md`
+- Character sheets: `src/assets/sprites/{name}_sheet.png` — 4 rows (south/north/west/east) x 12 cols (4 idle + 8 walk). Battle sheets in `sprites/battle/`
+- `src/assets/sprites/manifest.json` is written by the build and drives loading in `BootScene`
+- Scenery is placed with `addProp(scene, name, x, y)` and actors are depth-sorted with `track` / `sortTracked` from `src/systems/World.js`
+- Dialogue portraits are still 2D PNGs in `src/assets/portraits/` (the old Pixel Lab scripts in `scripts/` only matter for those now)
 
 ## Up next
 

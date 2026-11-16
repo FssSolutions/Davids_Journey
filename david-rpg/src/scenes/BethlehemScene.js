@@ -6,6 +6,7 @@ import gameState from '../systems/GameState.js';
 import DIALOGUES from '../data/DialogueData.js';
 import audioManager from '../systems/AudioManager.js';
 import { touchInput } from '../systems/TouchInput.js';
+import { addProps, addProp, hasProp, track, sortActor, sortTracked } from '../systems/World.js';
 
 export default class BethlehemScene extends Phaser.Scene {
   constructor() {
@@ -26,7 +27,7 @@ export default class BethlehemScene extends Phaser.Scene {
     this.player = this.physics.add.sprite(640, 740, 'david_walk', 0);
     this.player.setCollideWorldBounds(true);
     this.player.setScale(this.registry.get('playerScale') ?? 3);
-    this.player.setDepth(5);
+    track(this, this.player);
     this.valleyPortalShown = false;
 
     // Player shadow
@@ -36,6 +37,7 @@ export default class BethlehemScene extends Phaser.Scene {
     ).setDepth(4);
 
     this.physics.add.collider(this.player, this.wallLayer);
+    this.buildVillage();
 
     // ── Camera ──
     this.cameras.main.startFollow(this.player, true, 0.08, 0.08);
@@ -97,10 +99,25 @@ export default class BethlehemScene extends Phaser.Scene {
     this.wallLayer.setCollisionByExclusion([-1, 0]);
   }
 
+  // Blender-rendered scenery: Jesse's house, the village well, olive trees.
+  // Each prop is placed by the point where it meets the ground.
+  buildVillage() {
+    addProps(this, [
+      ['house', 900, 214],
+      ['house', 1120, 590, { flipX: true }],
+      ['well', 770, 478],
+      ['tree', 250, 330], ['tree', 110, 490], ['tree', 430, 856], ['tree', 1060, 900],
+      ['tree', 210, 876], ['tree', 1190, 776], ['tree', 770, 156], ['tree', 90, 130], ['tree', 1210, 136],
+      ['bush', 560, 640], ['bush', 380, 474], ['bush', 1010, 700], ['bush', 1000, 214],
+      ['rock', 300, 478], ['rock', 700, 566],
+    ]);
+    if (this.propBodies) this.physics.add.collider(this.player, this.propBodies);
+  }
+
   spawnSamuel(x, y) {
     const samuel = this.physics.add.sprite(x, y, 'samuel');
     samuel.setScale(this.registry.get('npcScale') ?? 3);
-    samuel.setDepth(5);
+    sortActor(samuel);
     samuel.setImmovable(true);
     if (this.anims.exists('samuel_idle_down')) samuel.play('samuel_idle_down');
     samuel.name = 'samuel';
@@ -133,7 +150,7 @@ export default class BethlehemScene extends Phaser.Scene {
   spawnJesse(x, y) {
     const jesse = this.add.sprite(x, y, 'jesse');
     jesse.setScale(this.registry.get('npcScale') ?? 3);
-    jesse.setDepth(5);
+    sortActor(jesse);
     if (this.anims.exists('jesse_idle_down')) jesse.play('jesse_idle_down');
 
     this.add.ellipse(x, y + 22, 26, 9, 0x000000, 0.25).setDepth(4);
@@ -157,13 +174,19 @@ export default class BethlehemScene extends Phaser.Scene {
       { x: 580, y: 755 },
     ];
 
-    sheepPositions.forEach(pos => {
-      const sg = this.add.graphics();
-      sg.fillStyle(0xf0ece0);
-      sg.fillEllipse(0, 0, 28, 20);
-      sg.fillStyle(0xd4c8b0);
-      sg.fillCircle(10, -8, 8); // head
-      sg.setPosition(pos.x, pos.y).setDepth(4);
+    sheepPositions.forEach((pos, i) => {
+      let sg;
+      if (hasProp(this, 'sheep')) {
+        sg = addProp(this, 'sheep', pos.x, pos.y + 10, { flipX: i % 2 === 1 });
+        track(this, sg, 0);
+      } else {
+        sg = this.add.graphics();
+        sg.fillStyle(0xf0ece0);
+        sg.fillEllipse(0, 0, 28, 20);
+        sg.fillStyle(0xd4c8b0);
+        sg.fillCircle(10, -8, 8); // head
+        sg.setPosition(pos.x, pos.y).setDepth(4);
+      }
 
       // Sheep wander
       this.time.addEvent({
@@ -172,6 +195,7 @@ export default class BethlehemScene extends Phaser.Scene {
         callback: () => {
           const nx = pos.x + Phaser.Math.Between(-30, 30);
           const ny = pos.y + Phaser.Math.Between(-20, 20);
+          if (sg.setFlipX) sg.setFlipX(nx < sg.x);   // sheep art faces east
           this.tweens.add({ targets: sg, x: nx, y: ny, duration: 1500, ease: 'Sine.easeInOut' });
         }
       });
@@ -256,6 +280,7 @@ export default class BethlehemScene extends Phaser.Scene {
     this.handlePlayerMovement();
     this.handleNPCInteraction();
     this.playerShadow.setPosition(this.player.x, this.player.y + 22);
+    sortTracked(this);
   }
 
   handlePlayerMovement() {

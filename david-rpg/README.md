@@ -39,7 +39,7 @@ david-rpg/
 └── src/
     ├── main.js                 # Phaser config + scene registry
     ├── scenes/
-    │   ├── BootScene.js        # Asset loading + placeholder textures
+    │   ├── BootScene.js        # Asset loading (Blender sprites) + fallback textures
     │   ├── TitleScene.js       # Cinematic title screen
     │   ├── BethlehemScene.js   # Chapter 1 overworld (playable)
     │   ├── DialogueScene.js    # NPC conversations + scripture callouts
@@ -114,7 +114,7 @@ Psalm 23 → Chapter 1 | Psalm 27 → Chapter 3 | Psalm 51 → Chapter 5
 ## Next Steps (Claude Code Tasks)
 
 - [ ] Tiled map integration (real tilemap JSON)
-- [ ] Sprite sheet animations (walk cycles for David/NPCs)
+- ✅ 2.5D art rendered from 3D models in Blender: walk cycles for the whole cast, battle animations, scenery with depth sorting (see `blender/README.md`)
 - [ ] Valley of Elah combat level
 - [ ] Audio — ambient desert, Hebrew-inspired battle music
 - [ ] Psalm Journal UI screen

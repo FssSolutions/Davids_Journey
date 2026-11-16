@@ -15,6 +15,7 @@ const ENEMIES = {
     xpReward: 20,
     loot: 'faith_orb',
     scale: 1.3,
+    battleScale: 1,
     taunt: 'The gods of Philistia will crush you!'
   },
   goliath: {
@@ -25,6 +26,7 @@ const ENEMIES = {
     xpReward: 100,
     loot: 'goliath_sword',
     scale: 1.6,
+    battleScale: 1.05,
     taunt: 'Come to me and I\'ll give your flesh to the birds!'
   }
 };
@@ -57,10 +59,19 @@ export default class CombatScene extends Phaser.Scene {
     this.buildBackground(width, height);
 
     // ── Enemy sprite ──
-    this.enemySprite = this.add.sprite(
-      width * 0.65, height * 0.38,
-      this.enemyData.sprite
-    ).setScale(this.enemyData.scale).setDepth(5);
+    // Blender battle sheets (large three-quarter renders with idle + attack) when present.
+    this.enemyBattleKey = `battle_${this.enemyKey}`;
+    this.hasBattleArt = this.textures.exists(this.enemyBattleKey) && this.textures.exists('battle_david');
+    if (this.hasBattleArt) {
+      this.enemySprite = this.add.sprite(width * 0.65, height * 0.40, this.enemyBattleKey, 0)
+        .setScale(this.enemyData.battleScale).setDepth(5);
+      this.enemySprite.play(`${this.enemyBattleKey}_idle`);
+    } else {
+      this.enemySprite = this.add.sprite(
+        width * 0.65, height * 0.38,
+        this.enemyData.sprite
+      ).setScale(this.enemyData.scale).setDepth(5);
+    }
 
     // Idle bounce
     this.tweens.add({
@@ -89,10 +100,15 @@ export default class CombatScene extends Phaser.Scene {
     }).setOrigin(0.5).setDepth(8);
 
     // ── Player sprite (left side) ──
-    this.playerSprite = this.add.sprite(
-      width * 0.3, height * 0.48,
-      'david'
-    ).setScale(this.game.registry.get('useRealSprites') ? 1 : 3.5).setDepth(5);
+    if (this.hasBattleArt) {
+      this.playerSprite = this.add.sprite(width * 0.3, height * 0.50, 'battle_david', 0).setDepth(5);
+      this.playerSprite.play('battle_david_idle');
+    } else {
+      this.playerSprite = this.add.sprite(
+        width * 0.3, height * 0.48,
+        'david'
+      ).setScale(this.game.registry.get('useRealSprites') ? 1 : 3.5).setDepth(5);
+    }
 
     this.add.text(width * 0.3, height * 0.26, 'David', {
       fontFamily: 'Georgia',
@@ -331,6 +347,7 @@ export default class CombatScene extends Phaser.Scene {
         } else {
           damage += Phaser.Math.Between(-3, 5);
           this.battleLog.setText(`${this.enemyData.name} attacks! ${damage} damage.`);
+          this.playBattleAnim(this.enemySprite, this.enemyBattleKey);
         }
       }
 
@@ -356,18 +373,32 @@ export default class CombatScene extends Phaser.Scene {
 
   // ── Animations ──
 
+  // Play a battle sheet's one-shot attack, then drop back to its idle loop.
+  playBattleAnim(sprite, key) {
+    if (!this.hasBattleArt || !sprite.active) return;
+    sprite.play(`${key}_attack`);
+    sprite.chain(`${key}_idle`);
+  }
+
   animateSlingStone() {
-    const stone = this.add.image(this.playerSprite.x + 20, this.playerSprite.y, 'stone').setDepth(10);
-    this.tweens.add({
-      targets: stone,
-      x: this.enemySprite.x,
-      y: this.enemySprite.y,
-      duration: 350,
-      ease: 'Sine.easeIn',
-      onComplete: () => {
-        stone.destroy();
-        this.hitFlash(this.enemySprite);
-      }
+    // With battle art David winds up first; the stone leaves as his arm comes forward.
+    this.playBattleAnim(this.playerSprite, 'battle_david');
+    const release = this.hasBattleArt ? 280 : 0;
+    this.time.delayedCall(release, () => {
+      const stone = this.add.image(
+        this.playerSprite.x + (this.hasBattleArt ? 36 : 20),
+        this.playerSprite.y - (this.hasBattleArt ? 30 : 0), 'stone').setDepth(10);
+      this.tweens.add({
+        targets: stone,
+        x: this.enemySprite.x,
+        y: this.enemySprite.y,
+        duration: 350,
+        ease: 'Sine.easeIn',
+        onComplete: () => {
+          stone.destroy();
+          this.hitFlash(this.enemySprite);
+        }
+      });
     });
   }
 
